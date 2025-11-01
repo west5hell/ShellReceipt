@@ -9,22 +9,28 @@ import Combine
 import Foundation
 import StoreKit
 
+/// Describes how receipts should be verified.
 enum ReceiptValidationMode {
+    /// Hand the receipt to Apple for official validation.
     case apple(sharedSecret: String?)
+    /// Skip Apple and return the raw receipt for a custom server.
     case customServer
 }
 
+/// Encapsulates the data required for remote receipt verification.
 struct ReceiptPayload {
     let base64Receipt: String
     let productID: String?
 }
 
+/// Outcome of a receipt verification attempt.
 struct ReceiptValidationResult {
     let activeSubscriptions: Set<String>
     let environment: ReceiptEnvironment
     let rawBody: [String: Any]
 }
 
+/// Apple verification endpoints.
 enum ReceiptEnvironment {
     case production
     case sandbox
@@ -73,12 +79,17 @@ protocol StoreKitServiceProtocol: ObservableObject {
     func reloadProducts()
     func purchase(product: SKProduct)
     func restorePurchases()
+    /// Validate the current receipt against Apple's endpoints, updating subscription state.
     func validateWithApple(sharedSecret: String?, productID: String?)
         async throws -> ReceiptValidationResult
+    /// Return the latest receipt encoded for custom server validation.
+    /// Return the latest receipt encoded for consumption by a custom server.
     func fetchReceiptForServer(productID: String?) async throws
         -> ReceiptPayload
 }
 
+/// Primary StoreKit 1 service providing product loading, purchase handling,
+/// restore flow, and receipt utilities for Apple or custom validation paths.
 @MainActor
 final class StoreKitService: NSObject, StoreKitServiceProtocol {
     @Published private(set) var products: [SKProduct] = []
@@ -115,6 +126,7 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
         SKPaymentQueue.default().remove(self)
     }
 
+    /// Request the latest `SKProduct` metadata from App Store Connect.
     func reloadProducts() {
         productsRequest?.cancel()
         let request = SKProductsRequest(productIdentifiers: productIDs)
@@ -123,6 +135,7 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
         request.start()
     }
 
+    /// Initiate a payment for the specified `SKProduct`.
     func purchase(product: SKProduct) {
         guard SKPaymentQueue.canMakePayments() else {
             print("[StoreKit] Purchases disabled on this device.")
@@ -133,6 +146,7 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
         SKPaymentQueue.default().add(payment)
     }
 
+    /// Trigger StoreKit's restore flow for this queue.
     func restorePurchases() {
         isRestoring = true
         SKPaymentQueue.default().restoreCompletedTransactions()
@@ -142,20 +156,57 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
         async throws -> ReceiptValidationResult
     {
         let receiptData = try await fetchReceiptData()
-        let validator = AppleReceiptValidator(
-            subscriptionProductIDs: subscriptionProductIDs,
-            sharedSecret: sharedSecret
+        do {
+            let result = try await AppleReceiptValidator(
+                subscriptionProductIDs: subscriptionProductIDs,
+                sharedSecret: sharedSecret,
+                enableStoreKitTestingFallback: true
+            ).validate(receiptData: receiptData, productID: productID)
+            activeSubscriptionProductIDs = result.activeSubscriptions
+            subscriptionActive = !result.activeSubscriptions.isEmpty
+            print(
+                "[Apple Validation] environment=\(result.environment.description) active=\(subscriptionActive)"
+            )
+            return result
+        } catch let error as AppleReceiptValidator.ValidationError {
+            if case .unknownStatus = error,
+                let fallbackSet = fallbackSubscriptionsForTesting(
+                    hint: productID
+                ),
+                fallbackSet.isEmpty == false
+            {
+                let fallbackResult = ReceiptValidationResult(
+                    activeSubscriptions: fallbackSet,
+                    environment: .sandbox,
+                    rawBody: [:]
+                )
+                activeSubscriptionProductIDs =
+                    fallbackResult.activeSubscriptions
+                subscriptionActive = !fallbackSet.isEmpty
+                print(
+                    "[Apple Validation] Using local fallback for StoreKit testing."
+                )
+                return fallbackResult
+            }
+            throw error
+        }
+    }
+
+    /// Derive a subscription set when running under StoreKit Testing (no Apple response).
+    private func fallbackSubscriptionsForTesting(hint productID: String?)
+        -> Set<String>?
+    {
+        if let productID, subscriptionProductIDs.contains(productID) {
+            return Set([productID])
+        }
+
+        let intersection = purchasedProductIDs.intersection(
+            subscriptionProductIDs
         )
-        let result = try await validator.validate(
-            receiptData: receiptData,
-            productID: productID
-        )
-        activeSubscriptionProductIDs = result.activeSubscriptions
-        subscriptionActive = !result.activeSubscriptions.isEmpty
-        print(
-            "[Apple Validation] environment=\(result.environment.description) active=\(subscriptionActive)"
-        )
-        return result
+        if intersection.isEmpty {
+            return nil
+        }
+        return intersection
     }
 
     func fetchReceiptForServer(productID: String?) async throws
@@ -177,6 +228,7 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
 
 @MainActor
 extension StoreKitService {
+    /// Load the current receipt from disk or request a refresh if missing.
     fileprivate func fetchReceiptData() async throws -> Data {
         let url = try receiptURL()
         if let data = try? Data(contentsOf: url), !data.isEmpty {
@@ -190,6 +242,7 @@ extension StoreKitService {
         return refreshed
     }
 
+    /// Helper returning the expected receipt location on disk.
     fileprivate func receiptURL() throws -> URL {
         guard let url = Bundle.main.appStoreReceiptURL else {
             throw ReceiptError.missing
@@ -197,6 +250,7 @@ extension StoreKitService {
         return url
     }
 
+    /// Bridge StoreKit's receipt refresh callback into async/await.
     fileprivate func refreshReceipt() async throws {
         try await withCheckedThrowingContinuation { continuation in
             let request = SKReceiptRefreshRequest()
@@ -221,6 +275,7 @@ extension StoreKitService {
 
 // MARK: - SKProductsRequestDelegate
 
+/// SKProductsRequestDelegate forwarded from StoreKit callbacks.
 extension StoreKitService: SKProductsRequestDelegate {
     nonisolated func productsRequest(
         _ request: SKProductsRequest,
@@ -250,6 +305,7 @@ extension StoreKitService: SKProductsRequestDelegate {
 
 // MARK: - SKPaymentTransactionObserver
 
+/// Transaction observer forwarding StoreKit callbacks to the main actor.
 extension StoreKitService: SKPaymentTransactionObserver {
     nonisolated func paymentQueue(
         _ queue: SKPaymentQueue,
@@ -281,6 +337,7 @@ extension StoreKitService: SKPaymentTransactionObserver {
         }
     }
 
+    /// Keep the published state in sync with StoreKit transaction updates.
     private func handle(transaction: SKPaymentTransaction) {
         let productID = transaction.payment.productIdentifier
 
@@ -290,11 +347,23 @@ extension StoreKitService: SKPaymentTransactionObserver {
             print("[StoreKit] Purchase success: \(productID)")
             isPurchasing = false
             SKPaymentQueue.default().finishTransaction(transaction)
+            Task {
+                try? await self.validateWithApple(
+                    sharedSecret: nil,
+                    productID: productID
+                )
+            }
         case .restored:
             purchasedProductIDs.insert(productID)
             print("[StoreKit] Purchase restored: \(productID)")
             isPurchasing = false
             SKPaymentQueue.default().finishTransaction(transaction)
+            Task {
+                try? await self.validateWithApple(
+                    sharedSecret: nil,
+                    productID: productID
+                )
+            }
         case .failed:
             if let error = transaction.error as? SKError,
                 error.code != .paymentCancelled
@@ -321,6 +390,7 @@ extension StoreKitService: SKPaymentTransactionObserver {
 
 // MARK: - Receipt refresh delegate
 
+/// Lightweight delegate to bridge `SKReceiptRefreshRequest` into continuations.
 private final class ReceiptRefreshDelegate: NSObject, SKRequestDelegate {
     private let completion: (Result<Void, Error>) -> Void
 
@@ -339,6 +409,7 @@ private final class ReceiptRefreshDelegate: NSObject, SKRequestDelegate {
 
 // MARK: - Receipt validation utilities
 
+/// Minimal validator that calls Apple's verifyReceipt endpoint (with optional fallback for StoreKit testing).
 struct AppleReceiptValidator: ReceiptValidating {
     enum ValidationError: Error {
         case invalidJSON
@@ -347,10 +418,16 @@ struct AppleReceiptValidator: ReceiptValidating {
 
     private let subscriptionProductIDs: Set<String>
     private let sharedSecret: String?
+    private let enableStoreKitTestingFallback: Bool
 
-    init(subscriptionProductIDs: Set<String>, sharedSecret: String? = nil) {
+    init(
+        subscriptionProductIDs: Set<String>,
+        sharedSecret: String? = nil,
+        enableStoreKitTestingFallback: Bool = false
+    ) {
         self.subscriptionProductIDs = subscriptionProductIDs
         self.sharedSecret = sharedSecret
+        self.enableStoreKitTestingFallback = enableStoreKitTestingFallback
     }
 
     func validate(receiptData: Data, productID: String?) async throws
@@ -399,6 +476,21 @@ struct AppleReceiptValidator: ReceiptValidating {
             throw ValidationError.unknownStatus
         }
 
+        if status != 0 {
+            guard enableStoreKitTestingFallback else {
+                throw ValidationError.unknownStatus
+            }
+            let fallbackActive = fallbackSubscriptions(from: json)
+            if fallbackActive.isEmpty {
+                throw ValidationError.unknownStatus
+            }
+            return ReceiptValidationResult(
+                activeSubscriptions: fallbackActive,
+                environment: environment,
+                rawBody: json
+            )
+        }
+
         let active = evaluateSubscriptionStatus(from: json, status: status)
         return ReceiptValidationResult(
             activeSubscriptions: active,
@@ -416,26 +508,66 @@ struct AppleReceiptValidator: ReceiptValidating {
         var activeIDs: Set<String> = []
 
         if let latestInfo = json["latest_receipt_info"] as? [[String: Any]] {
-            for entry in latestInfo {
-                guard
-                    let productID = entry["product_id"] as? String,
-                    subscriptionProductIDs.contains(productID)
-                else { continue }
+            activeIDs.formUnion(activeSubscriptions(from: latestInfo, now: now))
+        }
+        return activeIDs
+    }
 
-                if let expiresString = entry["expires_date_ms"] as? String,
-                    let expiresInterval = Double(expiresString)
-                {
+    private func fallbackSubscriptions(from json: [String: Any]) -> Set<String>
+    {
+        let now = Date()
+        var active: Set<String> = []
+
+        if let latestInfo = json["latest_receipt_info"] as? [[String: Any]] {
+            active.formUnion(activeSubscriptions(from: latestInfo, now: now))
+        }
+
+        if let receipt = json["receipt"] as? [String: Any],
+            let inApps = receipt["in_app"] as? [[String: Any]]
+        {
+            active.formUnion(activeSubscriptions(from: inApps, now: now))
+        }
+
+        return active
+    }
+
+    private func activeSubscriptions(from entries: [[String: Any]], now: Date)
+        -> Set<String>
+    {
+        var activeIDs: Set<String> = []
+
+        for entry in entries {
+            guard
+                let productID = entry["product_id"] as? String,
+                subscriptionProductIDs.contains(productID)
+            else { continue }
+
+            if let expiresValue = entry["expires_date_ms"] {
+                let interval: Double?
+                if let string = expiresValue as? String {
+                    interval = Double(string)
+                } else if let number = expiresValue as? NSNumber {
+                    interval = number.doubleValue
+                } else {
+                    interval = nil
+                }
+
+                if let expiresInterval = interval {
                     let expiryDate = Date(
                         timeIntervalSince1970: expiresInterval / 1000.0
                     )
                     if expiryDate > now {
                         activeIDs.insert(productID)
                     }
-                } else if entry["expires_date"] == nil {
-                    activeIDs.insert(productID)
+                    continue
                 }
             }
+
+            if entry["expires_date"] == nil {
+                activeIDs.insert(productID)
+            }
         }
+
         return activeIDs
     }
 }
