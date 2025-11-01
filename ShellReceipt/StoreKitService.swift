@@ -96,13 +96,13 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
 
     init(
         productIDs: Set<String> = [
-            "com.ponter.consumable.coffee",
-            "com.ponter.premium.monthly",
-            "com.ponter.premium.yearly",
+            "com.example.consumable.coffee",
+            "com.example.premium.monthly",
+            "com.example.premium.yearly",
         ],
         subscriptionProductIDs: Set<String> = [
-            "com.ponter.premium.monthly",
-            "com.ponter.premium.yearly",
+            "com.example.premium.monthly",
+            "com.example.premium.yearly",
         ]
     ) {
         self.productIDs = productIDs
