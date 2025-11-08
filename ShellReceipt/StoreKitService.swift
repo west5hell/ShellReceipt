@@ -156,57 +156,16 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
         async throws -> ReceiptValidationResult
     {
         let receiptData = try await fetchReceiptData()
-        do {
-            let result = try await AppleReceiptValidator(
-                subscriptionProductIDs: subscriptionProductIDs,
-                sharedSecret: sharedSecret,
-                enableStoreKitTestingFallback: true
-            ).validate(receiptData: receiptData, productID: productID)
-            activeSubscriptionProductIDs = result.activeSubscriptions
-            subscriptionActive = !result.activeSubscriptions.isEmpty
-            print(
-                "[Apple Validation] environment=\(result.environment.description) active=\(subscriptionActive)"
-            )
-            return result
-        } catch let error as AppleReceiptValidator.ValidationError {
-            if case .unknownStatus = error,
-                let fallbackSet = fallbackSubscriptionsForTesting(
-                    hint: productID
-                ),
-                fallbackSet.isEmpty == false
-            {
-                let fallbackResult = ReceiptValidationResult(
-                    activeSubscriptions: fallbackSet,
-                    environment: .sandbox,
-                    rawBody: [:]
-                )
-                activeSubscriptionProductIDs =
-                    fallbackResult.activeSubscriptions
-                subscriptionActive = !fallbackSet.isEmpty
-                print(
-                    "[Apple Validation] Using local fallback for StoreKit testing."
-                )
-                return fallbackResult
-            }
-            throw error
-        }
-    }
-
-    /// Derive a subscription set when running under StoreKit Testing (no Apple response).
-    private func fallbackSubscriptionsForTesting(hint productID: String?)
-        -> Set<String>?
-    {
-        if let productID, subscriptionProductIDs.contains(productID) {
-            return Set([productID])
-        }
-
-        let intersection = purchasedProductIDs.intersection(
-            subscriptionProductIDs
+        let result = try await AppleReceiptValidator(
+            subscriptionProductIDs: subscriptionProductIDs,
+            sharedSecret: sharedSecret
+        ).validate(receiptData: receiptData, productID: productID)
+        activeSubscriptionProductIDs = result.activeSubscriptions
+        subscriptionActive = !result.activeSubscriptions.isEmpty
+        print(
+            "[Apple Validation] environment=\(result.environment.description) active=\(subscriptionActive)"
         )
-        if intersection.isEmpty {
-            return nil
-        }
-        return intersection
+        return result
     }
 
     func fetchReceiptForServer(productID: String?) async throws
@@ -409,7 +368,7 @@ private final class ReceiptRefreshDelegate: NSObject, SKRequestDelegate {
 
 // MARK: - Receipt validation utilities
 
-/// Minimal validator that calls Apple's verifyReceipt endpoint (with optional fallback for StoreKit testing).
+/// Minimal validator that calls Apple's verifyReceipt endpoint.
 struct AppleReceiptValidator: ReceiptValidating {
     enum ValidationError: Error {
         case invalidJSON
@@ -418,16 +377,13 @@ struct AppleReceiptValidator: ReceiptValidating {
 
     private let subscriptionProductIDs: Set<String>
     private let sharedSecret: String?
-    private let enableStoreKitTestingFallback: Bool
 
     init(
         subscriptionProductIDs: Set<String>,
-        sharedSecret: String? = nil,
-        enableStoreKitTestingFallback: Bool = false
+        sharedSecret: String? = nil
     ) {
         self.subscriptionProductIDs = subscriptionProductIDs
         self.sharedSecret = sharedSecret
-        self.enableStoreKitTestingFallback = enableStoreKitTestingFallback
     }
 
     func validate(receiptData: Data, productID: String?) async throws
@@ -477,18 +433,7 @@ struct AppleReceiptValidator: ReceiptValidating {
         }
 
         if status != 0 {
-            guard enableStoreKitTestingFallback else {
-                throw ValidationError.unknownStatus
-            }
-            let fallbackActive = fallbackSubscriptions(from: json)
-            if fallbackActive.isEmpty {
-                throw ValidationError.unknownStatus
-            }
-            return ReceiptValidationResult(
-                activeSubscriptions: fallbackActive,
-                environment: environment,
-                rawBody: json
-            )
+            throw ValidationError.unknownStatus
         }
 
         let active = evaluateSubscriptionStatus(from: json, status: status)
@@ -511,24 +456,6 @@ struct AppleReceiptValidator: ReceiptValidating {
             activeIDs.formUnion(activeSubscriptions(from: latestInfo, now: now))
         }
         return activeIDs
-    }
-
-    private func fallbackSubscriptions(from json: [String: Any]) -> Set<String>
-    {
-        let now = Date()
-        var active: Set<String> = []
-
-        if let latestInfo = json["latest_receipt_info"] as? [[String: Any]] {
-            active.formUnion(activeSubscriptions(from: latestInfo, now: now))
-        }
-
-        if let receipt = json["receipt"] as? [String: Any],
-            let inApps = receipt["in_app"] as? [[String: Any]]
-        {
-            active.formUnion(activeSubscriptions(from: inApps, now: now))
-        }
-
-        return active
     }
 
     private func activeSubscriptions(from entries: [[String: Any]], now: Date)
