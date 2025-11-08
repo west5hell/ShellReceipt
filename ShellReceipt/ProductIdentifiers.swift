@@ -7,7 +7,25 @@
 
 import Foundation
 
-let appleSharedSecret = "<Apple Shared Secret>"
+enum ProductCatalog {
+    static let appleSharedSecret = "<Apple Shared Secret>"
+
+    /// Consumable products surfaced in `ConsumableProductsView`.
+    static let consumableProducts: Set<String> = [
+        "com.example.consumable.coffee"
+    ]
+
+    /// Subscription identifiers used across the app and validation layer.
+    static let subscriptionProducts: Set<String> = [
+        "com.example.premium.monthly",
+        "com.example.premium.yearly",
+    ]
+
+    /// Convenience union for initializing StoreKit product requests.
+    static let allProducts: Set<String> = consumableProducts.union(
+        subscriptionProducts
+    )
+}
 
 enum ValidationChoice: String, CaseIterable, Identifiable {
     case apple
@@ -22,12 +40,3 @@ enum ValidationChoice: String, CaseIterable, Identifiable {
         }
     }
 }
-
-let consumableProductIDs: Set<String> = [
-    "com.example.consumable.coffee"
-]
-
-let subscriptionProductIDs: Set<String> = [
-    "com.example.premium.monthly",
-    "com.example.premium.yearly",
-]

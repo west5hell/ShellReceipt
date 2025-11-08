@@ -15,7 +15,7 @@ struct ConsumableProductsView: View {
 
     private var consumableProducts: [SKProduct] {
         store.products.filter {
-            consumableProductIDs.contains($0.productIdentifier)
+            ProductCatalog.consumableProducts.contains($0.productIdentifier)
         }
     }
 
@@ -61,12 +61,12 @@ struct ConsumableProductsView: View {
             }
 
             if store.purchasedProductIDs.contains(
-                where: consumableProductIDs.contains
+                where: ProductCatalog.consumableProducts.contains
             ) {
                 Section("已购项目") {
                     ForEach(
                         store.purchasedProductIDs.filter(
-                            consumableProductIDs.contains
+                            ProductCatalog.consumableProducts.contains
                         ).sorted(),
                         id: \.self
                     ) { identifier in
@@ -117,13 +117,13 @@ struct ConsumableProductsView: View {
 
     private func runValidation() async {
         let productIDHint = store.purchasedProductIDs.filter(
-            consumableProductIDs.contains
+            ProductCatalog.consumableProducts.contains
         ).sorted().last
         switch validationChoice {
         case .apple:
             do {
                 _ = try await store.validateWithApple(
-                    sharedSecret: appleSharedSecret,
+                    sharedSecret: ProductCatalog.appleSharedSecret,
                     productID: productIDHint
                 )
             } catch {

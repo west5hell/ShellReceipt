@@ -48,7 +48,7 @@ struct ContentView: View {
                         Task {
                             do {
                                 _ = try await store.validateWithApple(
-                                    sharedSecret: appleSharedSecret,
+                                    sharedSecret: ProductCatalog.appleSharedSecret,
                                     productID: nil
                                 )
                             } catch {
@@ -68,7 +68,7 @@ struct ContentView: View {
             }
             do {
                 _ = try await store.validateWithApple(
-                    sharedSecret: appleSharedSecret,
+                    sharedSecret: ProductCatalog.appleSharedSecret,
                     productID: nil
                 )
             } catch {

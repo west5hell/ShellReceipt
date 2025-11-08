@@ -15,7 +15,7 @@ struct SubscriptionProductsView: View {
 
     private var subscriptionProducts: [SKProduct] {
         store.products.filter {
-            subscriptionProductIDs.contains($0.productIdentifier)
+            ProductCatalog.subscriptionProducts.contains($0.productIdentifier)
         }
     }
 
@@ -149,7 +149,7 @@ struct SubscriptionProductsView: View {
         case .apple:
             do {
                 _ = try await store.validateWithApple(
-                    sharedSecret: appleSharedSecret,
+                    sharedSecret: ProductCatalog.appleSharedSecret,
                     productID: productIDHint
                 )
             } catch {

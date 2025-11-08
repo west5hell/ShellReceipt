@@ -106,18 +106,12 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
     private var receiptRefreshRequest: SKReceiptRefreshRequest?
 
     init(
-        productIDs: Set<String> = [
-            "com.example.consumable.coffee",
-            "com.example.premium.monthly",
-            "com.example.premium.yearly",
-        ],
-        subscriptionProductIDs: Set<String> = [
-            "com.example.premium.monthly",
-            "com.example.premium.yearly",
-        ]
+        productIDs: Set<String>? = nil,
+        subscriptionProductIDs: Set<String>? = nil
     ) {
-        self.productIDs = productIDs
-        self.subscriptionProductIDs = subscriptionProductIDs
+        self.productIDs = productIDs ?? ProductCatalog.allProducts
+        self.subscriptionProductIDs =
+            subscriptionProductIDs ?? ProductCatalog.subscriptionProducts
         super.init()
         SKPaymentQueue.default().add(self)
     }
