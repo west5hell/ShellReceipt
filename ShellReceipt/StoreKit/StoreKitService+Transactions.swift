@@ -5,6 +5,7 @@
 //  Created by Pongt Chia on 1/11/25.
 //
 
+import os.log
 import StoreKit
 
 /// Transaction observer forwarding StoreKit callbacks to the main actor.
@@ -24,8 +25,14 @@ extension StoreKitService: SKPaymentTransactionObserver {
         _ queue: SKPaymentQueue
     ) {
         DispatchQueue.main.async {
-            print("[StoreKit] Restore completed.")
+            StoreKitLogger.general.info("Restore completed.")
             self.isRestoring = false
+            Task {
+                try? await self.validateWithApple(
+                    sharedSecret: ProductCatalog.appleSharedSecret,
+                    productID: nil
+                )
+            }
         }
     }
 
@@ -34,7 +41,9 @@ extension StoreKitService: SKPaymentTransactionObserver {
         restoreCompletedTransactionsFailedWithError error: Error
     ) {
         DispatchQueue.main.async {
-            print("[StoreKit] Restore failed: \(error.localizedDescription)")
+            StoreKitLogger.general.error(
+                "Restore failed: \(error.localizedDescription, privacy: .public)"
+            )
             self.isRestoring = false
         }
     }
@@ -46,45 +55,47 @@ extension StoreKitService: SKPaymentTransactionObserver {
         switch transaction.transactionState {
         case .purchased:
             purchasedProductIDs.insert(productID)
-            print("[StoreKit] Purchase success: \(productID)")
+            StoreKitLogger.general.info(
+                "Purchase success: \(productID, privacy: .public)"
+            )
             isPurchasing = false
             SKPaymentQueue.default().finishTransaction(transaction)
             Task {
                 try? await self.validateWithApple(
-                    sharedSecret: nil,
+                    sharedSecret: ProductCatalog.appleSharedSecret,
                     productID: productID
                 )
             }
         case .restored:
             purchasedProductIDs.insert(productID)
-            print("[StoreKit] Purchase restored: \(productID)")
-            isPurchasing = false
-            SKPaymentQueue.default().finishTransaction(transaction)
-            Task {
-                try? await self.validateWithApple(
-                    sharedSecret: nil,
-                    productID: productID
+            if restoredLogIdentifiers.insert(productID).inserted {
+                StoreKitLogger.general.info(
+                    "Purchase restored: \(productID, privacy: .public)"
                 )
             }
+            isPurchasing = false
+            SKPaymentQueue.default().finishTransaction(transaction)
         case .failed:
             if let error = transaction.error as? SKError,
                 error.code != .paymentCancelled
             {
-                print(
-                    "[StoreKit] Purchase failed: \(error.localizedDescription)"
+                StoreKitLogger.general.error(
+                    "Purchase failed: \(error.localizedDescription, privacy: .public)"
                 )
             } else {
-                print("[StoreKit] Purchase cancelled.")
+                StoreKitLogger.general.info("Purchase cancelled.")
             }
             isPurchasing = false
             SKPaymentQueue.default().finishTransaction(transaction)
         case .deferred:
-            print("[StoreKit] Purchase deferred: \(productID)")
+            StoreKitLogger.general.info(
+                "Purchase deferred: \(productID, privacy: .public)"
+            )
             isPurchasing = false
         case .purchasing:
             break
         @unknown default:
-            print("[StoreKit] Unknown transaction state.")
+            StoreKitLogger.general.error("Unknown transaction state.")
             SKPaymentQueue.default().finishTransaction(transaction)
         }
     }

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os.log
 import StoreKit
 
 /// SKProductsRequestDelegate forwarded from StoreKit callbacks.
@@ -19,8 +20,10 @@ extension StoreKitService: SKProductsRequestDelegate {
                 $0.productIdentifier < $1.productIdentifier
             }
             if response.invalidProductIdentifiers.isEmpty == false {
-                print(
-                    "[StoreKit] Invalid product IDs: \(response.invalidProductIdentifiers)"
+                let invalidIDs =
+                    response.invalidProductIdentifiers.joined(separator: ", ")
+                StoreKitLogger.general.warning(
+                    "Invalid product IDs: \(invalidIDs, privacy: .public)"
                 )
             }
         }
@@ -31,7 +34,9 @@ extension StoreKitService: SKProductsRequestDelegate {
         didFailWithError error: Error
     ) {
         DispatchQueue.main.async {
-            print("[StoreKit] Request failed: \(error.localizedDescription)")
+            StoreKitLogger.general.error(
+                "Product request failed: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 }

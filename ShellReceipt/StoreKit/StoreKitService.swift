@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import os.log
 import StoreKit
 
 @MainActor
@@ -42,6 +43,7 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
     private var productsRequest: SKProductsRequest?
     var receiptRefreshDelegate: ReceiptRefreshDelegate?
     var receiptRefreshRequest: SKReceiptRefreshRequest?
+    var restoredLogIdentifiers: Set<String> = []
 
     init(
         productIDs: Set<String>? = nil,
@@ -70,7 +72,7 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
     /// Initiate a payment for the specified `SKProduct`.
     func purchase(product: SKProduct) {
         guard SKPaymentQueue.canMakePayments() else {
-            print("[StoreKit] Purchases disabled on this device.")
+            StoreKitLogger.general.warning("Purchases disabled on this device.")
             return
         }
         isPurchasing = true
@@ -81,21 +83,23 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
     /// Trigger StoreKit's restore flow for this queue.
     func restorePurchases() {
         isRestoring = true
+        restoredLogIdentifiers.removeAll()
         SKPaymentQueue.default().restoreCompletedTransactions()
     }
 
-    func validateWithApple(sharedSecret: String?, productID: String?)
+    func validateWithApple(sharedSecret: String? = nil, productID: String?)
         async throws -> ReceiptValidationResult
     {
+        let resolvedSecret = sharedSecret ?? ProductCatalog.appleSharedSecret
         let receiptData = try await fetchReceiptData()
         let result = try await AppleReceiptValidator(
             subscriptionProductIDs: subscriptionProductIDs,
-            sharedSecret: sharedSecret
+            sharedSecret: resolvedSecret
         ).validate(receiptData: receiptData, productID: productID)
         activeSubscriptionProductIDs = result.activeSubscriptions
         subscriptionActive = !result.activeSubscriptions.isEmpty
-        print(
-            "[Apple Validation] environment=\(result.environment.description) active=\(subscriptionActive)"
+        StoreKitLogger.general.info(
+            "Apple validation finished. environment=\(result.environment.description, privacy: .public) active=\(self.subscriptionActive, privacy: .public)"
         )
         return result
     }
@@ -108,8 +112,8 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
             base64Receipt: receiptData.base64EncodedString(),
             productID: productID
         )
-        print(
-            "[Server Receipt] product=\(productID ?? "unknown") length=\(payload.base64Receipt.count)"
+        StoreKitLogger.general.info(
+            "Server receipt prepared for product=\(productID ?? "unknown", privacy: .public) length=\(payload.base64Receipt.count, privacy: .public)"
         )
         return payload
     }
