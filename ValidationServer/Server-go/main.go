@@ -83,6 +83,7 @@ func verifyReceipt(receiptData, sharedSecret string, useSandbox bool) (*AppleRes
 		return nil, err
 	}
 
+	// Status 21007: sandbox receipt sent to production, retry with sandbox
 	if result.Status == 21007 {
 		return verifyReceipt(receiptData, sharedSecret, true)
 	}
@@ -119,6 +120,11 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req VerifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Receipt == "" {
 		http.Error(w, "Missing receipt data", http.StatusBadRequest)
 		return
 	}
@@ -159,7 +165,7 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Countent-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
@@ -168,7 +174,7 @@ func main() {
 	http.HandleFunc("/health", healthHandler)
 
 	port := ":3000"
-	fmt.Printf("Apple IAP validation server runnning on port %s\n", port)
+	fmt.Printf("Apple IAP validation server running on port %s\n", port)
 	if err := http.ListenAndServe(port, nil); err != nil {
 		fmt.Printf("Error starting server: %s\n", err)
 	}
