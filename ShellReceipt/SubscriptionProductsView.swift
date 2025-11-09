@@ -163,9 +163,12 @@ struct SubscriptionProductsView: View {
                     productID: productIDHint
                 )
                 let resolvedID = payload.productID ?? productIDHint ?? "unknown"
-                networkHelper.validateReceipt(
+                let response = try await networkHelper.validateReceipt(
                     receipt: payload.base64Receipt,
                     productID: resolvedID
+                )
+                print(
+                    "[Server Receipt] subscription status=\(response.status) valid=\(response.valid)"
                 )
             } catch {
                 print(

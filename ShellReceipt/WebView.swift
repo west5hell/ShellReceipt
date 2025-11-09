@@ -10,13 +10,6 @@ import StoreKit
 import SwiftUI
 import WebKit
 
-struct NetworkHelper {
-    func validateReceipt(receipt: String, productID: String) {
-        // Placeholder for real network request
-        debugPrint("[Remote Validation]", productID, receipt.prefix(10))
-    }
-}
-
 struct WebView: UIViewControllerRepresentable {
     @EnvironmentObject var store: StoreKitService
     private let networkHelper = NetworkHelper()
@@ -147,9 +140,12 @@ class CustomsWebController: UIViewController, WKScriptMessageHandler {
                     productID: productID
                 )
                 let resolvedID = payload.productID ?? productID
-                networkHelper.validateReceipt(
+                let response = try await networkHelper.validateReceipt(
                     receipt: payload.base64Receipt,
                     productID: resolvedID
+                )
+                print(
+                    "[Server Receipt] web status=\(response.status) valid=\(response.valid)"
                 )
             } catch {
                 print(

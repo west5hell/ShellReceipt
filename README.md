@@ -72,9 +72,11 @@
    // 自建服务器：获取最新 receipt，交由后端验证
    do {
        let payload = try await store.fetchReceiptForServer(productID: "optional_product_id")
-       // 传给服务器
-       networkHelper.validateReceipt(receipt: payload.base64Receipt,
-                                     productID: payload.productID ?? "")
+       let result = try await networkHelper.validateReceipt(
+           receipt: payload.base64Receipt,
+           productID: payload.productID
+       )
+       print("Server validation:", result.status, result.valid)
    } catch {
        print("Server receipt fetch failed:", error)
    }
@@ -87,7 +89,7 @@
 ## 注意事项
 
 - 商品/订阅 ID 目前写死在 `StoreKitService` 内；移植时根据实际情况调整或改为配置化。
-- `NetworkHelper.validateReceipt` 仅作占位，请替换为真实的网络请求实现。
+- `NetworkHelper` 默认连接 `http://127.0.0.1:3000/verify`（可搭配 `ValidationServer/Server-go`），若有自建后端可在初始化时传入实际 host、port。
 - 所有日志均打印到 Xcode 控制台；正式项目可加用户提示、错误上报等。
 - 服务使用 `@MainActor` 管理状态，并确保所有 delegate 回调回到主线程，兼容 Swift 6 的严格隔离要求。
 
