@@ -11,16 +11,18 @@
   - 返回给自建服务器进行验单
 - WebView 内执行购买请求并走服务器验单
 - UI 层提供 SwiftUI 商品列表，并在购买/恢复期间显示全屏进度遮罩
-- 支持 StoreKit Configuration 测试：苹果返回 210xx 时自动回退到本地 receipt，便于模拟器验证订阅
 
 ## 快速接入 `StoreKitService`
 
-1. **复制文件**
+   1. **复制文件**
 
-   - `ShellReceipt/StoreKitService.swift`
+   - `ShellReceipt/StoreKit/ProductIdentifiers.swift`（集中配置商品 ID 与 shared secret）
+   - `ShellReceipt/StoreKit/` 下的 StoreKit 服务文件（`StoreKitService.swift` 及同目录扩展）
    - `ShellReceipt/WebView.swift`（如需 WebView 场景）
    - `ShellReceipt/demo.html`（可选，演示用）
    - `ShellReceipt/NetworkHelper`（示例网络工具，可替换为项目内实现）
+
+   其中 `StoreKit/ProductIdentifiers.swift` 暴露 `ProductCatalog`，集中存放所有商品 ID 与 Apple shared secret，迁移到其他项目时只需修改该文件即可。
 
 2. **初始化服务**
 
