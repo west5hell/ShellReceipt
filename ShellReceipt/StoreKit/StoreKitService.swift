@@ -37,6 +37,7 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
     @Published var activeSubscriptionProductIDs: Set<String> = []
     @Published var isRestoring = false
     @Published var isPurchasing = false
+    @Published var isValidating = false
 
     private let productIDs: Set<String>
     private let subscriptionProductIDs: Set<String>
@@ -44,6 +45,7 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
     var receiptRefreshDelegate: ReceiptRefreshDelegate?
     var receiptRefreshRequest: SKReceiptRefreshRequest?
     var restoredLogIdentifiers: Set<String> = []
+    private var validationDepth = 0
 
     init(
         productIDs: Set<String>? = nil,
@@ -91,6 +93,12 @@ final class StoreKitService: NSObject, StoreKitServiceProtocol {
         async throws -> ReceiptValidationResult
     {
         let resolvedSecret = sharedSecret ?? ProductCatalog.appleSharedSecret
+        validationDepth += 1
+        isValidating = true
+        defer {
+            validationDepth = max(validationDepth - 1, 0)
+            isValidating = validationDepth > 0
+        }
         let receiptData = try await fetchReceiptData()
         let result = try await AppleReceiptValidator(
             subscriptionProductIDs: subscriptionProductIDs,

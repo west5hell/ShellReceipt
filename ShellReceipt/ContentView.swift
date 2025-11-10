@@ -58,6 +58,7 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .disabled(store.isValidating)
                 }
             }
             .navigationTitle("内购示例")

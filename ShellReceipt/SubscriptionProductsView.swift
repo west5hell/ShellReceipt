@@ -90,6 +90,7 @@ struct SubscriptionProductsView: View {
                         await runValidation()
                     }
                 }
+                .disabled(store.isValidating)
                 Button("恢复购买") {
                     store.restorePurchases()
                 }
@@ -104,22 +105,6 @@ struct SubscriptionProductsView: View {
                 }
             }
         }
-        .overlay {
-            if store.isRestoring {
-                ZStack {
-                    Color.black.opacity(0.15).ignoresSafeArea()
-                    ProgressView("恢复中...")
-                        .padding(20)
-                        .background(
-                            .ultraThinMaterial,
-                            in: RoundedRectangle(
-                                cornerRadius: 14,
-                                style: .continuous
-                            )
-                        )
-                }
-            }
-        }
         .task {
             if store.products.isEmpty {
                 store.reloadProducts()
@@ -129,7 +114,7 @@ struct SubscriptionProductsView: View {
             if isBusy {
                 ZStack {
                     Color.black.opacity(0.15).ignoresSafeArea()
-                    ProgressView(store.isRestoring ? "恢复中..." : "处理中...")
+                    ProgressView(busyStatusText)
                         .padding(20)
                         .background(
                             .ultraThinMaterial,
@@ -187,6 +172,16 @@ struct SubscriptionProductsView: View {
     }
 
     private var isBusy: Bool {
-        store.isPurchasing || store.isRestoring
+        store.isPurchasing || store.isRestoring || store.isValidating
+    }
+
+    private var busyStatusText: String {
+        if store.isRestoring {
+            return "恢复中..."
+        }
+        if store.isValidating {
+            return "验单中..."
+        }
+        return "处理中..."
     }
 }

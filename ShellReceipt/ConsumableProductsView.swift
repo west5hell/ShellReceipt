@@ -82,6 +82,7 @@ struct ConsumableProductsView: View {
                         await runValidation()
                     }
                 }
+                .disabled(store.isValidating)
             }
         }
         .navigationTitle("消耗型商品")
@@ -101,7 +102,7 @@ struct ConsumableProductsView: View {
             if isBusy {
                 ZStack {
                     Color.black.opacity(0.15).ignoresSafeArea()
-                    ProgressView(store.isRestoring ? "恢复中..." : "处理中...")
+                    ProgressView(busyStatusText)
                         .padding(20)
                         .background(
                             .ultraThinMaterial,
@@ -161,6 +162,16 @@ struct ConsumableProductsView: View {
     }
 
     private var isBusy: Bool {
-        store.isPurchasing || store.isRestoring
+        store.isPurchasing || store.isRestoring || store.isValidating
+    }
+
+    private var busyStatusText: String {
+        if store.isRestoring {
+            return "恢复中..."
+        }
+        if store.isValidating {
+            return "验单中..."
+        }
+        return "处理中..."
     }
 }
