@@ -24,4 +24,4 @@ Follow the existing history by using imperative, descriptive subjects (`Enhance 
 
 ## Security & Configuration Tips
 
-Never commit shared secrets; `StoreKitService.validateWithApple` expects the shared secret via local environment or CI secret variables. When touching `demo.html`, ensure `window.webkit.messageHandlers.purchase` remains the only exposed bridge and sanitize incoming product IDs before passing them into StoreKit.
+Never commit shared secrets; `ProductCatalog.appleSharedSecret` should come from secure storage in production, and the sample `NetworkHelper` only targets localhost for development. When touching `demo.html`, ensure `window.webkit.messageHandlers.purchase` remains the only exposed bridge and sanitize incoming product IDs before passing them into StoreKit.

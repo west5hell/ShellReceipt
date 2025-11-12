@@ -136,13 +136,9 @@ class CustomsWebController: UIViewController, WKScriptMessageHandler {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let payload = try await store.fetchReceiptForServer(
+                let response = try await store.validateWithServer(
+                    networkHelper: networkHelper,
                     productID: productID
-                )
-                let resolvedID = payload.productID ?? productID
-                let response = try await networkHelper.validateReceipt(
-                    receipt: payload.base64Receipt,
-                    productID: resolvedID
                 )
                 print(
                     "[Server Receipt] web status=\(response.status) valid=\(response.valid)"

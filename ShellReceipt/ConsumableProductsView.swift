@@ -10,9 +10,6 @@ import SwiftUI
 
 struct ConsumableProductsView: View {
     @EnvironmentObject private var store: StoreKitService
-    @State private var validationChoice: ValidationChoice = .apple
-    private let networkHelper = NetworkHelper()
-
     private var consumableProducts: [SKProduct] {
         store.products.filter {
             ProductCatalog.consumableProducts.contains($0.productIdentifier)
@@ -21,17 +18,6 @@ struct ConsumableProductsView: View {
 
     var body: some View {
         List {
-            if ValidationChoice.allCases.count > 1 {
-                Section("验单方式") {
-                    Picker("验单方式", selection: $validationChoice) {
-                        ForEach(ValidationChoice.allCases) { choice in
-                            Text(choice.title).tag(choice)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-            }
-
             Section("商品") {
                 if consumableProducts.isEmpty {
                     Text("尚未加载到商品。")
@@ -76,14 +62,6 @@ struct ConsumableProductsView: View {
                 }
             }
 
-            Section {
-                Button("验证凭证") {
-                    Task {
-                        await runValidation()
-                    }
-                }
-                .disabled(store.isValidating)
-            }
         }
         .navigationTitle("消耗型商品")
         .toolbar {
@@ -112,43 +90,6 @@ struct ConsumableProductsView: View {
                             )
                         )
                 }
-            }
-        }
-    }
-
-    private func runValidation() async {
-        let productIDHint = store.purchasedProductIDs.filter(
-            ProductCatalog.consumableProducts.contains
-        ).sorted().last
-        switch validationChoice {
-        case .apple:
-            do {
-                _ = try await store.validateWithApple(
-                    sharedSecret: ProductCatalog.appleSharedSecret,
-                    productID: productIDHint
-                )
-            } catch {
-                print(
-                    "[Apple Validation] consumable error: \(error.localizedDescription)"
-                )
-            }
-        case .server:
-            do {
-                let payload = try await store.fetchReceiptForServer(
-                    productID: productIDHint
-                )
-                let resolvedID = payload.productID ?? productIDHint ?? "unknown"
-                let response = try await networkHelper.validateReceipt(
-                    receipt: payload.base64Receipt,
-                    productID: resolvedID
-                )
-                print(
-                    "[Server Receipt] consumable status=\(response.status) valid=\(response.valid)"
-                )
-            } catch {
-                print(
-                    "[Server Receipt] consumable error: \(error.localizedDescription)"
-                )
             }
         }
     }

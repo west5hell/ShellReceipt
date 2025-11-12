@@ -10,9 +10,6 @@ import SwiftUI
 
 struct SubscriptionProductsView: View {
     @EnvironmentObject private var store: StoreKitService
-    @State private var validationChoice: ValidationChoice = .apple
-    private let networkHelper = NetworkHelper()
-
     private var subscriptionProducts: [SKProduct] {
         store.products.filter {
             ProductCatalog.subscriptionProducts.contains($0.productIdentifier)
@@ -21,17 +18,6 @@ struct SubscriptionProductsView: View {
 
     var body: some View {
         List {
-            if ValidationChoice.allCases.count > 1 {
-                Section("验单方式") {
-                    Picker("验单方式", selection: $validationChoice) {
-                        ForEach(ValidationChoice.allCases) { choice in
-                            Text(choice.title).tag(choice)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-            }
-
             Section("订阅状态") {
                 HStack {
                     Text("订阅用户")
@@ -85,12 +71,6 @@ struct SubscriptionProductsView: View {
             }
 
             Section {
-                Button("验证凭证") {
-                    Task {
-                        await runValidation()
-                    }
-                }
-                .disabled(store.isValidating)
                 Button("恢复购买") {
                     store.restorePurchases()
                 }
@@ -124,41 +104,6 @@ struct SubscriptionProductsView: View {
                             )
                         )
                 }
-            }
-        }
-    }
-
-    private func runValidation() async {
-        let productIDHint = store.activeSubscriptionProductIDs.first
-        switch validationChoice {
-        case .apple:
-            do {
-                _ = try await store.validateWithApple(
-                    sharedSecret: ProductCatalog.appleSharedSecret,
-                    productID: productIDHint
-                )
-            } catch {
-                print(
-                    "[Apple Validation] subscription error: \(error.localizedDescription)"
-                )
-            }
-        case .server:
-            do {
-                let payload = try await store.fetchReceiptForServer(
-                    productID: productIDHint
-                )
-                let resolvedID = payload.productID ?? productIDHint ?? "unknown"
-                let response = try await networkHelper.validateReceipt(
-                    receipt: payload.base64Receipt,
-                    productID: resolvedID
-                )
-                print(
-                    "[Server Receipt] subscription status=\(response.status) valid=\(response.valid)"
-                )
-            } catch {
-                print(
-                    "[Server Receipt] subscription error: \(error.localizedDescription)"
-                )
             }
         }
     }

@@ -31,7 +31,7 @@ struct NetworkHelper {
         self.baseURL = URL(string: "http://\(host):\(port)")!
     }
 
-    func validateReceipt(receipt: String, productID: String?) async throws
+    func validateReceipt(receipt: String, sandbox: Bool = true) async throws
         -> ValidationServerResponse
     {
         var request = URLRequest(url: baseURL.appendingPathComponent("verify"))
@@ -41,7 +41,7 @@ struct NetworkHelper {
         let payload = ValidationServerRequest(
             receipt: receipt,
             shared_secret: ProductCatalog.appleSharedSecret,
-            sandbox: true
+            sandbox: sandbox
         )
         request.httpBody = try JSONEncoder().encode(payload)
 

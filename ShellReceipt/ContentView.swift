@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var store: StoreKitService
+    private let networkHelper = NetworkHelper()
 
     var body: some View {
         NavigationStack {
@@ -44,16 +45,16 @@ struct ContentView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    Button("刷新订阅状态") {
+                    Button("验证凭证") {
                         Task {
                             do {
-                                _ = try await store.validateWithApple(
-                                    sharedSecret: ProductCatalog.appleSharedSecret,
+                                _ = try await store.validateWithServer(
+                                    networkHelper: networkHelper,
                                     productID: nil
                                 )
                             } catch {
                                 print(
-                                    "[Apple Validation] manual refresh failed: \(error.localizedDescription)"
+                                    "[Server Validation] manual refresh failed: \(error.localizedDescription)"
                                 )
                             }
                         }
@@ -66,16 +67,6 @@ struct ContentView: View {
         .task {
             if store.products.isEmpty {
                 store.reloadProducts()
-            }
-            do {
-                _ = try await store.validateWithApple(
-                    sharedSecret: ProductCatalog.appleSharedSecret,
-                    productID: nil
-                )
-            } catch {
-                print(
-                    "[Apple Validation] initial check failed: \(error.localizedDescription)"
-                )
             }
         }
     }

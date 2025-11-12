@@ -6,9 +6,7 @@
 
 - 加载内购商品（消耗型、订阅型）
 - 购买、恢复购买
-- 生成 App Store receipt，并可：
-  - 直接向 Apple 服务器验证
-  - 返回给自建服务器进行验单
+- 生成 App Store receipt，并可返回给自建服务器进行验单
 - WebView 内执行购买请求并走服务器验单
 - UI 层提供 SwiftUI 商品列表，并在购买/恢复期间显示全屏进度遮罩
 
@@ -55,30 +53,18 @@
    store.restorePurchases()
    ```
 
-4. **验单**
+4. **验单（自建服务器）**
 
    ```swift
-   // Apple 验单（静默执行，可在控制台查看结果）
+   let networkHelper = NetworkHelper(host: "127.0.0.1", port: 3000)
    do {
-       let result = try await store.validateWithApple(
-           sharedSecret: "your_shared_secret",
+       let response = try await store.validateWithServer(
+           networkHelper: networkHelper,
            productID: "optional_product_id"
        )
-       print(result.environment, result.activeSubscriptions)
+       print("Server validation:", response.status, response.valid)
    } catch {
-       print("Apple validation failed:", error)
-   }
-
-   // 自建服务器：获取最新 receipt，交由后端验证
-   do {
-       let payload = try await store.fetchReceiptForServer(productID: "optional_product_id")
-       let result = try await networkHelper.validateReceipt(
-           receipt: payload.base64Receipt,
-           productID: payload.productID
-       )
-       print("Server validation:", result.status, result.valid)
-   } catch {
-       print("Server receipt fetch failed:", error)
+       print("Server validation failed:", error)
    }
    ```
 
@@ -89,7 +75,7 @@
 ## 注意事项
 
 - 商品/订阅 ID 目前写死在 `StoreKitService` 内；移植时根据实际情况调整或改为配置化。
-- `NetworkHelper` 默认连接 `http://127.0.0.1:3000/verify`（可搭配 `ValidationServer/Server-go`），若有自建后端可在初始化时传入实际 host、port。
+- `NetworkHelper` 默认连接 `http://127.0.0.1:3000/verify`（可搭配 `ValidationServer/Server-go`），若有自建后端可在初始化时传入实际 host、port，并通过 `StoreKitService.validateWithServer` 发送收据。
 - 所有日志均打印到 Xcode 控制台；正式项目可加用户提示、错误上报等。
 - 服务使用 `@MainActor` 管理状态，并确保所有 delegate 回调回到主线程，兼容 Swift 6 的严格隔离要求。
 
@@ -97,7 +83,7 @@
 
 1. 使用 Xcode 打开 `ShellReceipt.xcodeproj`
 2. 运行到模拟器/真机
-3. 进入 “消耗型商品”“订阅商品”“WebView 购买示例” 体验不同场景
+3. 进入 “消耗型商品”“订阅商品” 体验购买与恢复，“WebView 购买示例” 展示自建服务器验单流程
 4. 查看 Xcode 控制台了解购买、验单日志输出
 
 欢迎基于此项目扩展更多内购管理逻辑（收据缓存、策略配置、多环境等）。如有问题可自行调整或提 Issue。祝开发顺利！
