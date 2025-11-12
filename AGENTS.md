@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-The app lives under `ShellReceipt/`, with SwiftUI entry point `ShellReceiptApp.swift`, StoreKit 2 state in `StoreKit/StoreKit2Service.swift`, legacy StoreKit 1 logic (used by the WebView demo) in `StoreKit/StoreKitService.swift`, and feature views such as `ConsumableProductsView.swift`, `SubscriptionProductsView.swift`, and `WebView.swift`. UI resources stay in `Assets.xcassets`, while the in-app purchase bridge for web demos sits in `demo.html`. Keep StoreKit-specific code inside `StoreKit/`, and change product IDs/shared secrets only via `StoreKit/ProductIdentifiers.swift` so migrations touch a single file.
+The app lives under `ShellReceipt/`, with SwiftUI entry point `ShellReceiptApp.swift`, StoreKit 2 state in `StoreKit/StoreKit2Service.swift`, legacy StoreKit 1 logic (used by the WebView demo) in `StoreKit/StoreKitService.swift`, and feature views such as `ConsumableProductsView.swift`, `SubscriptionProductsView.swift`, and `WebView.swift`. UI resources stay in `Assets.xcassets`, while the in-app purchase bridge for web demos sits in `demo.html`. Store product IDs/shared secrets through the catalog providers (`ProductCatalog.Test.swift`, `ProductCatalog.Review.swift`) so switching environments only requires swapping the provider.
 
 ## Build, Test, and Development Commands
 

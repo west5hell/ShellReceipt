@@ -17,6 +17,13 @@ struct ShellReceiptApp: App {
             ContentView()
                 .environmentObject(storeKit1)
                 .environmentObject(storeKit2)
+                .task {
+                    #if TARGETING_REVIEW
+                    ProductCatalog.provider = ReviewProductCatalog()
+                    #else
+                    ProductCatalog.provider = TestProductCatalog()
+                    #endif
+                }
         }
     }
 }

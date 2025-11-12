@@ -10,7 +10,7 @@ import SwiftUI
 
 struct ConsumableProductsView: View {
     @EnvironmentObject private var store: StoreKit2Service
-    @State private var purchaseMessage: String?
+    @State private var purchaseAlert: PurchaseAlert?
 
     private var consumableProducts: [Product] {
         store.products.filter {
@@ -38,8 +38,11 @@ struct ConsumableProductsView: View {
                                 Spacer()
                                 Button("Buy") {
                                     Task {
-                                        let message = await store.purchase(product: product)
-                                        purchaseMessage = message
+                                        if let message = await store.purchase(product: product) {
+                                            await MainActor.run {
+                                                purchaseAlert = PurchaseAlert(message: message)
+                                            }
+                                        }
                                     }
                                 }
                                 .disabled(isBusy)
@@ -91,13 +94,12 @@ struct ConsumableProductsView: View {
                 }
             }
         }
-        .alert("Purchase Result", isPresented: Binding<Bool>(
-            get: { purchaseMessage != nil },
-            set: { if !$0 { purchaseMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { purchaseMessage = nil }
-        } message: {
-            Text(purchaseMessage ?? "")
+        .alert(item: $purchaseAlert) { alert in
+            Alert(
+                title: Text("Purchase Result"),
+                message: Text(alert.message),
+                dismissButton: .cancel(Text("OK")) { purchaseAlert = nil }
+            )
         }
     }
 

@@ -22,6 +22,7 @@ final class StoreKit2Service: ObservableObject {
     @Published private(set) var isValidating = false
 
     private var updatesTask: Task<Void, Never>?
+    private var processedTransactionIDs: Set<Transaction.ID> = []
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "ShellReceipt",
@@ -55,8 +56,8 @@ final class StoreKit2Service: ObservableObject {
         }
     }
 
-    func purchase(product: Product) async -> String {
-        guard isPurchasing == false else { return "Purchase already in progress." }
+    func purchase(product: Product) async -> String? {
+        guard isPurchasing == false else { return nil }
         isPurchasing = true
         defer { isPurchasing = false }
         do {
@@ -64,15 +65,15 @@ final class StoreKit2Service: ObservableObject {
             switch result {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
-                updateState(with: transaction)
+                let didChange = updateState(with: transaction)
                 await transaction.finish()
-                return "Purchase completed."
+                return didChange ? "Purchase completed." : nil
             case .userCancelled:
-                return "Purchase cancelled."
+                return nil
             case .pending:
-                return "Purchase pending."
+                return nil
             @unknown default:
-                return "Unknown purchase state."
+                return nil
             }
         } catch {
             logger.error("Purchase failed: \(error.localizedDescription, privacy: .public)")
@@ -103,6 +104,7 @@ final class StoreKit2Service: ObservableObject {
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
+                processedTransactionIDs.insert(transaction.id)
                 purchases.insert(transaction.productID)
                 if ProductCatalog.subscriptionProducts.contains(
                     transaction.productID
@@ -123,8 +125,11 @@ final class StoreKit2Service: ObservableObject {
             for await result in Transaction.updates {
                 do {
                     let transaction = try self.checkVerified(result)
-                    self.updateState(with: transaction)
-                    await transaction.finish()
+                    if self.updateState(with: transaction) {
+                        await transaction.finish()
+                    } else {
+                        await transaction.finish()
+                    }
                 } catch {
                     continue
                 }
@@ -132,12 +137,18 @@ final class StoreKit2Service: ObservableObject {
         }
     }
 
-    private func updateState(with transaction: Transaction) {
-        purchasedProductIDs.insert(transaction.productID)
-        if ProductCatalog.subscriptionProducts.contains(transaction.productID) {
-            activeSubscriptionProductIDs.insert(transaction.productID)
-            subscriptionActive = true
+    private func updateState(with transaction: Transaction) -> Bool {
+        var stateChanged = false
+        let newTransaction = processedTransactionIDs.insert(transaction.id).inserted
+        if purchasedProductIDs.insert(transaction.productID).inserted {
+            stateChanged = true
         }
+        if ProductCatalog.subscriptionProducts.contains(transaction.productID) {
+            let inserted = activeSubscriptionProductIDs.insert(transaction.productID).inserted
+            subscriptionActive = true
+            stateChanged = stateChanged || inserted
+        }
+        return newTransaction || stateChanged
     }
 
     private func checkVerified(
