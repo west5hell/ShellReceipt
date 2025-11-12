@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-The app lives under `ShellReceipt/`, with SwiftUI entry point `ShellReceiptApp.swift`, shared state under `StoreKit/StoreKitService.swift` (+ extensions), and feature views such as `ConsumableProductsView.swift`, `SubscriptionProductsView.swift`, and `WebView.swift`. UI resources stay in `Assets.xcassets`, while the in-app purchase bridge for web demos sits in `demo.html`. Keep StoreKit-facing logic isolated in the `StoreKit/` folder, and do all product ID/shared-secret updates via `StoreKit/ProductIdentifiers.swift` (`ProductCatalog`) so migrations require editing a single file.
+The app lives under `ShellReceipt/`, with SwiftUI entry point `ShellReceiptApp.swift`, StoreKit 2 state in `StoreKit/StoreKit2Service.swift`, legacy StoreKit 1 logic (used by the WebView demo) in `StoreKit/StoreKitService.swift`, and feature views such as `ConsumableProductsView.swift`, `SubscriptionProductsView.swift`, and `WebView.swift`. UI resources stay in `Assets.xcassets`, while the in-app purchase bridge for web demos sits in `demo.html`. Keep StoreKit-specific code inside `StoreKit/`, and change product IDs/shared secrets only via `StoreKit/ProductIdentifiers.swift` so migrations touch a single file.
 
 ## Build, Test, and Development Commands
 
@@ -12,7 +12,7 @@ The app lives under `ShellReceipt/`, with SwiftUI entry point `ShellReceiptApp.s
 
 ## Coding Style & Naming Conventions
 
-Follow the Swift API Design Guidelines: 4-space indentation, `PascalCase` for types, `camelCase` for properties/functions, and mark async store actions `@MainActor` as done in `StoreKitService`. Keep modifiers grouped (`.task`, `.sheet`, `.alert`) and prefer computed properties over long view builders. Wrap user-facing strings in `LocalizedStringKey` when adding new UI text. No formatter is enforced, so let Xcode’s “Re-Indent” run before committing.
+Follow the Swift API Design Guidelines: 4-space indentation, `PascalCase` for types, `camelCase` for properties/functions, and mark async store actions `@MainActor` as done in both StoreKit services. Keep modifiers grouped (`.task`, `.sheet`, `.alert`) and prefer computed properties over long view builders. Wrap user-facing strings in `LocalizedStringKey` when adding new UI text. No formatter is enforced, so let Xcode’s “Re-Indent” run before committing.
 
 ## Testing Guidelines
 
@@ -20,7 +20,7 @@ Add XCTest targets mirroring the module (e.g., `ShellReceiptTests`). Name tests 
 
 ## Commit & Pull Request Guidelines
 
-Follow the existing history by using imperative, descriptive subjects (`Enhance README.md…`). Scope commits by feature slice (service change, UI tweak, docs). PRs should include: summary of user impact, testing notes (`xcodebuild test`, manual scenarios), linked issues, and screenshots or console excerpts for StoreKit flows so reviewers can verify receipts without rerunning everything.
+Follow the existing history by using imperative, descriptive subjects (`Enhance README.md…`). Scope commits by feature slice (StoreKit 2 service changes, WebView server-validation tweaks, docs). PRs should include: summary of user impact, testing notes (`xcodebuild test`, manual scenarios), linked issues, and screenshots or console excerpts for StoreKit flows so reviewers can verify receipts without rerunning everything.
 
 ## Security & Configuration Tips
 
