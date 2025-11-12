@@ -9,51 +9,52 @@ import StoreKit
 import SwiftUI
 
 struct SubscriptionProductsView: View {
-    @EnvironmentObject private var store: StoreKitService
-    private var subscriptionProducts: [SKProduct] {
+    @EnvironmentObject private var store: StoreKit2Service
+    @State private var purchaseMessage: String?
+
+    private var subscriptionProducts: [Product] {
         store.products.filter {
-            ProductCatalog.subscriptionProducts.contains($0.productIdentifier)
+            ProductCatalog.subscriptionProducts.contains($0.id)
         }
     }
 
     var body: some View {
         List {
-            Section("订阅状态") {
+            Section("Subscription Status") {
                 HStack {
-                    Text("订阅用户")
+                    Text("Active Subscriber")
                     Spacer()
-                    Text(store.subscriptionActive ? "是" : "否")
-                        .foregroundColor(
-                            store.subscriptionActive ? .green : .primary
-                        )
+                    Text(store.subscriptionActive ? "Yes" : "No")
+                        .foregroundColor(store.subscriptionActive ? .green : .primary)
                 }
-                ForEach(store.activeSubscriptionProductIDs.sorted(), id: \.self)
-                { identifier in
-                    Text(identifier)
+                ForEach(store.activeSubscriptionProductIDs.sorted(), id: \.self) {
+                    Text($0)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("商品") {
+            Section("Products") {
                 if subscriptionProducts.isEmpty {
-                    Text("尚未加载到商品。")
+                    Text("No products loaded yet.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(subscriptionProducts, id: \.identifiableID) {
-                        product in
+                    ForEach(subscriptionProducts, id: \.id) { product in
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(product.localizedTitle)
+                            Text(product.displayName)
                                 .font(.headline)
-                            Text(product.localizedDescription)
+                            Text(product.description)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             HStack {
-                                Text(priceString(for: product))
+                                Text(product.displayPrice)
                                     .font(.subheadline)
                                 Spacer()
-                                Button("购买") {
-                                    store.purchase(product: product)
+                                Button("Buy") {
+                                    Task {
+                                        let message = await store.purchase(product: product)
+                                        purchaseMessage = message
+                                    }
                                 }
                                 .disabled(isBusy)
                             }
@@ -63,32 +64,35 @@ struct SubscriptionProductsView: View {
                 }
             }
 
-            if let first = store.activeSubscriptionProductIDs.first {
-                Section("当前订阅") {
-                    Text(first)
+            if let active = store.activeSubscriptionProductIDs.sorted().first {
+                Section("Current Subscription") {
+                    Text(active)
                         .font(.footnote)
                 }
             }
 
             Section {
-                Button("恢复购买") {
+                Button("Refresh Entitlements") {
+                    Task { await store.refreshEntitlements() }
+                }
+                .disabled(store.isValidating)
+                Button("Restore Purchases") {
                     store.restorePurchases()
                 }
                 .disabled(isBusy)
             }
         }
-        .navigationTitle("订阅商品")
+        .navigationTitle("Subscriptions (StoreKit 2)")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("刷新商品") {
-                    store.reloadProducts()
+                Button("Reload Products") {
+                    Task { await store.loadProducts() }
                 }
             }
         }
         .task {
-            if store.products.isEmpty {
-                store.reloadProducts()
-            }
+            await store.loadProductsIfNeeded()
+            await store.refreshEntitlements()
         }
         .overlay {
             if isBusy {
@@ -106,27 +110,31 @@ struct SubscriptionProductsView: View {
                 }
             }
         }
-    }
-
-    private func priceString(for product: SKProduct) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.locale = product.priceLocale
-        return formatter.string(from: product.price)
-            ?? product.price.stringValue
+        .alert("Purchase Result", isPresented: Binding<Bool>(
+            get: { purchaseMessage != nil },
+            set: { if !$0 { purchaseMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { purchaseMessage = nil }
+        } message: {
+            Text(purchaseMessage ?? "")
+        }
     }
 
     private var isBusy: Bool {
         store.isPurchasing || store.isRestoring || store.isValidating
+            || store.isLoadingProducts
     }
 
     private var busyStatusText: String {
         if store.isRestoring {
-            return "恢复中..."
+            return "Restoring..."
         }
         if store.isValidating {
-            return "验单中..."
+            return "Refreshing..."
         }
-        return "处理中..."
+        if store.isLoadingProducts {
+            return "Loading..."
+        }
+        return "Processing..."
     }
 }

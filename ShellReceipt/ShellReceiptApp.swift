@@ -9,12 +9,14 @@ import SwiftUI
 
 @main
 struct ShellReceiptApp: App {
-    @StateObject private var store = StoreKitService()
+    @StateObject private var storeKit1 = StoreKitService()
+    @StateObject private var storeKit2 = StoreKit2Service()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(store)
+                .environmentObject(storeKit1)
+                .environmentObject(storeKit2)
         }
     }
 }

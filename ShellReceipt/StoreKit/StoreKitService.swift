@@ -10,6 +10,21 @@ import Foundation
 import StoreKit
 import os.log
 
+/// Encapsulates the data required for remote receipt validation.
+struct ReceiptPayload {
+    let base64Receipt: String
+    let productID: String?
+}
+
+enum ReceiptError: Error {
+    case missing
+    case empty
+}
+
+extension SKProduct {
+    var identifiableID: String { productIdentifier }
+}
+
 @MainActor
 protocol StoreKitServiceProtocol: ObservableObject {
     var products: [SKProduct] { get }

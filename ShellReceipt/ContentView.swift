@@ -9,65 +9,53 @@ import StoreKit
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject private var store: StoreKitService
-    private let networkHelper = NetworkHelper()
+    @EnvironmentObject private var storeKit1: StoreKitService
+    @EnvironmentObject private var storeKit2: StoreKit2Service
 
     var body: some View {
         NavigationStack {
             List {
-                Section("功能演示") {
-                    NavigationLink("消耗型商品") {
+                Section("Examples") {
+                    NavigationLink("Consumable Products") {
                         ConsumableProductsView()
                     }
-                    NavigationLink("订阅商品") {
+                    NavigationLink("Subscription Products") {
                         SubscriptionProductsView()
                     }
-                    NavigationLink("WebView 购买示例") {
+                    NavigationLink("WebView Demo (Server Validation)") {
                         WebView()
                             .ignoresSafeArea()
                     }
                 }
 
-                Section("当前状态") {
+                Section("Subscription Status") {
                     HStack {
-                        Text("订阅用户")
+                        Text("Active Subscriber")
                         Spacer()
-                        Text(store.subscriptionActive ? "是" : "否")
-                            .foregroundColor(
-                                store.subscriptionActive ? .green : .primary
-                            )
+                        Text(storeKit2.subscriptionActive ? "Yes" : "No")
+                            .foregroundColor(storeKit2.subscriptionActive ? .green : .primary)
                     }
-                    ForEach(
-                        store.activeSubscriptionProductIDs.sorted(),
-                        id: \.self
-                    ) { identifier in
-                        Text(identifier)
+                    ForEach(storeKit2.activeSubscriptionProductIDs.sorted(), id: \.self) {
+                        Text($0)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    Button("验证凭证") {
+                    Button("Refresh Entitlements") {
                         Task {
-                            do {
-                                _ = try await store.validateWithServer(
-                                    networkHelper: networkHelper,
-                                    productID: nil
-                                )
-                            } catch {
-                                print(
-                                    "[Server Validation] manual refresh failed: \(error.localizedDescription)"
-                                )
-                            }
+                            await storeKit2.refreshEntitlements()
                         }
                     }
-                    .disabled(store.isValidating)
+                    .disabled(storeKit2.isValidating)
                 }
             }
-            .navigationTitle("内购示例")
+            .navigationTitle("In-App Purchase Demo")
         }
         .task {
-            if store.products.isEmpty {
-                store.reloadProducts()
+            if storeKit1.products.isEmpty {
+                storeKit1.reloadProducts()
             }
+            await storeKit2.loadProductsIfNeeded()
+            await storeKit2.refreshEntitlements()
         }
     }
 }
